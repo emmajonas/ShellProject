@@ -71,22 +71,6 @@ int execute(char **args) {
   return run(args);
 }
 
-char *read_input(void) {
-    char *input = NULL;
-    size_t size = 0;
-    ssize_t chars = getline(&input, &size, stdin);
-
-    if (chars == -1){
-        if (feof(stdin)) {
-          exit(EXIT_SUCCESS);
-        } else  {
-          fprintf(stderr, "read_input: getline error\n");
-          exit(EXIT_FAILURE);
-        }
-    }
-    return input;
-}
-
 char **split_args(char *input) {
     char **args = malloc((MAX_LINE/2 + 1) * sizeof(char*));
 
@@ -103,6 +87,22 @@ char **split_args(char *input) {
     }
     args[i] = NULL;
     return args;
+}
+
+char *read_input(void) {
+    char *input = NULL;
+    size_t size = 0;
+    ssize_t chars = getline(&input, &size, stdin);
+
+    if (chars == -1){
+        if (feof(stdin)) {
+          exit(EXIT_SUCCESS);
+        } else  {
+          fprintf(stderr, "read_input: getline error\n");
+          exit(EXIT_FAILURE);
+        }
+    }
+    return input;
 }
 
 int main(void) {

@@ -1,16 +1,67 @@
-#include <sys/wait.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/wait.h>
 
 #define MAX_LINE 80 /* The maximum length command */
 #define DELIM " \t\r\n\a"
+
+int launch_pipe(char **args1, char **args2) {
+  int fd[2];
+  pid_t pid;
+  int status;
+  
+  if(pipe(fd) != 0) {
+    fprintf(stderr, "run_pipe: failed to create pipe.\n");
+    return 1;
+  }
+
+  pid = fork();
+
+  if(pid < 0) {
+    fprintf(stderr, "launch_pipe: fork failed\n");
+    return 1;
+  } else if(pid == 0) {
+    close(fd[1]);
+    dup2(fd[0], 0);
+    if (execvp(args2[0], args2) == -1) {
+      fprintf(stderr, "mysh: pipe: %s: command not found\n", args2[0]);
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    close(fd[0]);
+    dup2(fd[1], 1);
+    if (execvp(args1[0], args1) == -1) {
+      fprintf(stderr, "mysh: pipe: %s: command not found\n", args1[0]);
+      exit(EXIT_FAILURE);
+    }
+  }
+  return 1;
+}
+
+int run_pipe(char **args1, char **args2) {
+  pid_t pid, ppid;
+  int status;
+
+  pid = fork();
+
+  if(pid < 0) {
+    fprintf(stderr, "run_pipe: fork failed\n");
+    return 1;
+  } else if(pid == 0) {
+    launch_pipe(args1, args2);
+  } else {
+    ppid = waitpid(pid, &status, WUNTRACED);
+  }
+  return 1;
+}
 
 int run_cd(char **args) {
   if (args[1] != NULL) {
     if (chdir(args[1]) != 0) {
       fprintf(stderr, "mysh: cd: %s: no such file or directory\n", args[1]);
+      return 1;
     }
   }
   return 1;
@@ -20,7 +71,7 @@ int run_exit(char **args) {
   return 0;
 }
 
-int run(char **args) {
+int run_command(char **args) {
     pid_t pid, ppid;
     int status;
     int background = 0;
@@ -41,7 +92,7 @@ int run(char **args) {
     }
 
     if (pid < 0) { /* error occurred */ 
-        fprintf(stderr, "Fork Failed\n");
+        fprintf(stderr, "run_command: fork failed\n");
         return 1;
     } else if (pid == 0) { /* child process */
         if (execvp(args[0], args) == -1) {
@@ -68,7 +119,40 @@ int execute(char **args) {
     return run_exit(args);
   }
 
-  return run(args);
+  return run_command(args);
+}
+
+int split_pipe(char *input) {
+  char **args = malloc((MAX_LINE/2 + 1) * sizeof(char*));
+  char **args1 = malloc((MAX_LINE/2 + 1) * sizeof(char*));
+  int pip = 0;
+
+    if (!args || !args1) {
+      fprintf(stderr, "split_pipe: malloc error\n");
+      exit(EXIT_FAILURE);
+    }
+
+    char *token = strtok(input, DELIM);
+    int i = 0;
+    int j = 0;
+
+    while(token != NULL) {
+      if (strcmp(token, "|") == 0){
+        pip = 1;
+        token = strtok (NULL, DELIM);
+        continue;
+      }
+      if (pip) {
+        args1[j++] = token;
+      } else {
+        args[i++] = token;
+      }
+      token = strtok (NULL, DELIM);
+    }
+    args[i] = NULL;
+    args1[j] = NULL;
+
+    return run_pipe(args, args1);
 }
 
 char **split_args(char *input) {
@@ -112,6 +196,7 @@ int main(void) {
   int status;
   char history[MAX_LINE];
   int has_hist = 0;
+  int pip = 0;
 
   while (should_run) {
     printf("mysh:~$ ");
@@ -129,9 +214,22 @@ int main(void) {
       has_hist = 1;
       strcpy(history, input);
     }
+    
+    int i = 0;
+    while(input[i] != '\0') {
+      if (input[i++] == '|'){
+        pip = 1;
+      }
+    }
 
-    args = split_args(input);
-    status = execute(args);
+  
+    if (pip) {
+      status = split_pipe(input);
+      pip = 0;
+    } else {
+      args = split_args(input);
+      status = execute(args);
+    }
 
     should_run = status;
 

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <ctype.h>
 
 #define MAX_LINE 80 /* The maximum length command */
 #define DELIM " \t\r\n\a"
@@ -13,7 +14,7 @@ int launch_pipe(char **args1, char **args2) {
   int status;
   
   if(pipe(fd) != 0) {
-    fprintf(stderr, "run_pipe: failed to create pipe.\n");
+    fprintf(stderr, "launch_pipe: failed to create pipe.\n");
     return 1;
   }
 
@@ -23,15 +24,15 @@ int launch_pipe(char **args1, char **args2) {
     fprintf(stderr, "launch_pipe: fork failed\n");
     return 1;
   } else if(pid == 0) {
-    close(fd[1]);
     dup2(fd[0], 0);
+    close(fd[1]);
     if (execvp(args2[0], args2) == -1) {
       fprintf(stderr, "mysh: pipe: %s: command not found\n", args2[0]);
       exit(EXIT_FAILURE);
     }
   } else {
-    close(fd[0]);
     dup2(fd[1], 1);
+    close(fd[0]);
     if (execvp(args1[0], args1) == -1) {
       fprintf(stderr, "mysh: pipe: %s: command not found\n", args1[0]);
       exit(EXIT_FAILURE);
@@ -50,7 +51,7 @@ int run_pipe(char **args1, char **args2) {
     fprintf(stderr, "run_pipe: fork failed\n");
     return 1;
   } else if(pid == 0) {
-    launch_pipe(args1, args2);
+    status = launch_pipe(args1, args2);
   } else {
     ppid = waitpid(pid, &status, WUNTRACED);
   }
@@ -122,13 +123,13 @@ int execute(char **args) {
   return run_command(args);
 }
 
-int split_pipe(char *input) {
+int split_other(char *input) {
   char **args = malloc((MAX_LINE/2 + 1) * sizeof(char*));
   char **args1 = malloc((MAX_LINE/2 + 1) * sizeof(char*));
   int pip = 0;
 
     if (!args || !args1) {
-      fprintf(stderr, "split_pipe: malloc error\n");
+      fprintf(stderr, "split_other: malloc error\n");
       exit(EXIT_FAILURE);
     }
 
@@ -189,6 +190,21 @@ char *read_input(void) {
     return input;
 }
 
+char *trim_space(char *str) {
+  char *str2;
+  // leading
+  while(isspace((unsigned char)*str)) str++;
+
+  if(*str == 0)
+    return str;
+  // trailing
+  str2 = str + strlen(str) - 1;
+  while(str2 > str && isspace((unsigned char)*str2)) str2--;
+
+  str2[1] = '\0';
+  return str;
+}
+
 int main(void) {
   int should_run = 1; /* flag to determine when to exit program */
   char **args; /* command line arguments */
@@ -201,18 +217,19 @@ int main(void) {
   while (should_run) {
     printf("mysh:~$ ");
     input = read_input();
+    strcpy(input, trim_space(input));
 
-    if(strcmp(input, "!!\n") == 0){
+    if(strcmp(input, "!!") == 0){
       if (has_hist == 0) {
         printf("No commands in history.\n");
         continue;
       } else {
           strcpy(input, history);
-          printf("%s", input);
+          printf("%s\n", input);
       }
-    } else {
-      has_hist = 1;
-      strcpy(history, input);
+    } else if(strcmp(input, "") != 0){
+        has_hist = 1;
+        strcpy(history, input);
     }
     
     int i = 0;
@@ -221,10 +238,9 @@ int main(void) {
         pip = 1;
       }
     }
-
   
     if (pip) {
-      status = split_pipe(input);
+      status = split_other(input);
       pip = 0;
     } else {
       args = split_args(input);

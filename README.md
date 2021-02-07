@@ -8,7 +8,7 @@ Designed and implemented a simple shell in C for my Operating Systems class.
 - `cd` command to change directory
 - pipes with `|`
 - input and output redirection with `>` or `<`
-- background processes by adding `&` to the end of any command (still buggy with interactive processes, like `top &`)
+- background processes by adding `&` to the end of any command
 - `!!` history feature to execute the previous command
 - exit command
 

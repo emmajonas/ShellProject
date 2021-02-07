@@ -175,6 +175,7 @@ int run_command(char **args) {
         dup2(out, 1);
         close(out);
       }
+      setpgid(0, 0);
       if (execvp(args[0], args) == -1) {
         fprintf(stderr, "mysh: %s: command not found\n", args[0]);
         exit(EXIT_FAILURE);
